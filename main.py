@@ -54,7 +54,7 @@ def main():
         # 載入符號模板（如果存在）
         template_dir = "templates"
         if os.path.exists(template_dir):
-            card_detector.symbol_recognizer.load_templates(template_dir)
+            card_detector.symbol_recognizer.load_templates()
             print(f"✓ 載入符號模板: {template_dir}")
         else:
             print("⚠ 未找到符號模板，將使用實時學習模式")
