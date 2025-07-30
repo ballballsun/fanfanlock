@@ -71,45 +71,80 @@ class CardDetector:
         
     def _detect_game_grid(self, frame: np.ndarray) -> Tuple[bool, List]:
         """檢測6x4遊戲網格"""
+        print("=== 開始檢測遊戲網格 ===")
+        
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        print(f"影像轉換為灰度圖，尺寸: {gray.shape}")
         
         # 使用邊緣檢測
         edges = cv2.Canny(gray, 50, 150)
+        print("已完成 Canny 邊緣檢測 (閾值: 50-150)")
         
         # 尋找輪廓
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        print(f"找到 {len(contours)} 個輪廓")
         
         # 篩選矩形卡牌
         card_contours = []
-        for contour in contours:
+        print("開始篩選矩形卡牌...")
+        
+        for i, contour in enumerate(contours):
             # 計算輪廓面積
             area = cv2.contourArea(contour)
+            
             if area < 500:  # 太小的區域忽略
+                print(f"  輪廓 {i}: 面積 {area:.1f} 太小，忽略")
                 continue
-                
+            
+            print(f"  輪廓 {i}: 面積 {area:.1f}")
+            
             # 近似輪廓為多邊形
             epsilon = 0.02 * cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, epsilon, True)
+            
+            print(f"    → 多邊形近似結果: {len(approx)} 個頂點")
             
             # 檢查是否為矩形（4個頂點）
             if len(approx) == 4:
                 x, y, w, h = cv2.boundingRect(contour)
                 aspect_ratio = w / h
                 
+                print(f"    → 邊界矩形: ({x}, {y}, {w}, {h}), 長寬比: {aspect_ratio:.2f}")
+                
                 # 檢查長寬比是否合理（卡牌通常接近正方形）
                 if 0.7 < aspect_ratio < 1.5:
                     card_contours.append((x, y, x+w, y+h, area))
-                    
+                    print(f"    → ✓ 符合條件，加入候選卡牌 (總數: {len(card_contours)})")
+                else:
+                    print(f"    → ✗ 長寬比不符合 (0.7 < {aspect_ratio:.2f} < 1.5)")
+            else:
+                print(f"    → ✗ 非矩形 ({len(approx)} 個頂點)")
+        
+        print(f"\n篩選完成，找到 {len(card_contours)} 個候選卡牌")
+        
         # 檢查是否找到24張卡牌
         if len(card_contours) == 24:
+            print("✓ 找到正確數量的卡牌 (24張)")
+            
             # 按位置排序
+            print("開始按位置排序...")
             card_contours.sort(key=lambda x: (x[1], x[0]))  # 先按y排序，再按x排序
+            print("排序完成")
             
             # 驗證網格排列
+            print("開始驗證網格排列...")
             if self._verify_grid_layout(card_contours):
+                print("✓ 網格排列驗證通過")
+                print("=== 網格檢測成功 ===\n")
                 return True, card_contours
-                
+            else:
+                print("✗ 網格排列驗證失敗")
+        else:
+            print(f"✗ 卡牌數量不正確 (需要24張，找到{len(card_contours)}張)")
+        
+        print("=== 網格檢測失敗 ===\n")
         return False, []
+
         
     def _verify_grid_layout(self, positions: List) -> bool:
         """驗證卡牌是否按6x4網格排列"""
