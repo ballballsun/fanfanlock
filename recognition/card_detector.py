@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from typing import List, Dict, Tuple, Optional
 from utils.image_utils import ImageUtils
-from recognition.symbol_recognizer import SymbolRecognizer
+from recognition.symbol_recognizer_v2 import SymbolRecognizer
 
 class CardDetector:
     """卡牌檢測器 - 檢測翻翻樂中的卡牌位置和狀態"""
@@ -35,9 +35,9 @@ class CardDetector:
         # 檢查光線條件
         mean_brightness = np.mean(gray)
         if mean_brightness < 50:
-            result['message'] = "光線太暗，請增加光線"
-        elif mean_brightness > 200:
-            result['message'] = "光線太亮，請減少光線或調整角度"
+            result['message'] = f"光線太暗，請增加光線，目前平均亮度: {mean_brightness}"
+        elif mean_brightness > 250:
+            result['message'] = f"光線太亮，請減少光線或調整角度，目前平均亮度: {mean_brightness}"
         else:
             result['lighting_ok'] = True
             
@@ -53,9 +53,9 @@ class CardDetector:
                 card_height = abs(positions[0][3] - positions[0][1])
                 
                 if card_width < 30 or card_height < 30:
-                    result['message'] = "距離太遠，請靠近一些"
-                elif card_width > 150 or card_height > 150:
-                    result['message'] = "距離太近，請遠離一些"
+                    result['message'] = f"距離太遠，請靠近一些，目前卡牌寬度: {card_width}"
+                elif card_width > 200 or card_height > 200:
+                    result['message'] = f"距離太近，請遠離一些，目前卡牌寬度: {card_width}"
                 else:
                     result['distance_ok'] = True
         else:
@@ -178,9 +178,10 @@ class CardDetector:
         
         # 未翻開的卡牌通常顏色較單一，方差較小
         total_variance = np.sum(color_variance)
-        
+        print(f"Card total_variance: {total_variance}")
+
         # 根據方差判斷（需要根據實際情況調整閾值）
-        return total_variance > 1000  # 翻開的卡牌顏色變化較大
+        return total_variance > 6000  # 翻開的卡牌顏色變化較大
         
     def update_back_template(self, back_image: np.ndarray):
         """更新卡牌背面模板"""
@@ -201,6 +202,7 @@ class CardDetector:
                 symbol_counts[card['symbol']] = symbol_counts.get(card['symbol'], 0) + 1
                 
         matched_pairs = sum(1 for count in symbol_counts.values() if count == 2) // 2
+        print(f"Matched pairs: {matched_pairs}")
         progress = (matched_pairs / 12) * 100
         
         return {
@@ -210,3 +212,6 @@ class CardDetector:
             'flipped_count': len(flipped_cards),
             'game_complete': matched_pairs == 12
         }
+
+    def save(self):
+        self.symbol_recognizer.save_pending_symbols()
