@@ -4,9 +4,10 @@ import cv2
 from PIL import Image, ImageTk
 import threading
 import time
+import numpy as np
 
 class GameGUI:
-    """翻翻樂遊戲輔助系統GUI"""
+    """翻翻樂遊戲輔助系統GUI - 適配Picamera2"""
     
     def __init__(self, video_capture, card_detector, memory_logic):
         self.video_capture = video_capture
@@ -14,7 +15,7 @@ class GameGUI:
         self.memory_logic = memory_logic
         
         self.root = tk.Tk()
-        self.root.title("翻翻樂遊戲輔助系統")
+        self.root.title("翻翻樂遊戲輔助系統 - Picamera2版本")
         self.root.geometry("1200x800")
         
         self.is_running = False
@@ -44,22 +45,35 @@ class GameGUI:
         self.status_label = ttk.Label(control_frame, text="系統啟動中...", font=("Arial", 12))
         self.status_label.grid(row=0, column=0, columnspan=2, pady=5)
         
+        # 攝像頭控制按鈕
+        camera_frame = ttk.LabelFrame(control_frame, text="攝像頭控制", padding="5")
+        camera_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+        
+        self.focus_btn = ttk.Button(camera_frame, text="自動對焦", command=self.auto_focus)
+        self.focus_btn.grid(row=0, column=0, padx=2, sticky="ew")
+        
+        self.brightness_btn = ttk.Button(camera_frame, text="調整亮度", command=self.adjust_brightness)
+        self.brightness_btn.grid(row=0, column=1, padx=2, sticky="ew")
+        
+        camera_frame.columnconfigure(0, weight=1)
+        camera_frame.columnconfigure(1, weight=1)
+        
         # 校準按鈕
         self.calibrate_btn = ttk.Button(control_frame, text="開始校準", command=self.start_calibration)
-        self.calibrate_btn.grid(row=1, column=0, columnspan=2, pady=5, sticky="ew")
+        self.calibrate_btn.grid(row=2, column=0, columnspan=2, pady=5, sticky="ew")
         
         # 遊戲控制
-        ttk.Separator(control_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky="ew", pady=10)
+        ttk.Separator(control_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky="ew", pady=10)
         
         self.start_btn = ttk.Button(control_frame, text="開始遊戲", command=self.start_game, state="disabled")
-        self.start_btn.grid(row=3, column=0, pady=5, sticky="ew")
+        self.start_btn.grid(row=4, column=0, pady=5, sticky="ew")
         
         self.reset_btn = ttk.Button(control_frame, text="重置遊戲", command=self.reset_game)
-        self.reset_btn.grid(row=3, column=1, pady=5, sticky="ew")
+        self.reset_btn.grid(row=4, column=1, pady=5, sticky="ew")
         
         # 遊戲統計
         stats_frame = ttk.LabelFrame(control_frame, text="遊戲統計", padding="5")
-        stats_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=10)
+        stats_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=10)
         
         self.progress_var = tk.StringVar(value="進度: 0/12")
         ttk.Label(stats_frame, textvariable=self.progress_var).grid(row=0, column=0, sticky="w")
@@ -72,7 +86,7 @@ class GameGUI:
         
         # 建議區域
         suggestions_frame = ttk.LabelFrame(control_frame, text="翻牌建議", padding="5")
-        suggestions_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=10)
+        suggestions_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=10)
         
         self.suggestions_text = tk.Text(suggestions_frame, height=8, width=30, wrap=tk.WORD)
         scrollbar = ttk.Scrollbar(suggestions_frame, orient="vertical", command=self.suggestions_text.yview)
@@ -85,7 +99,7 @@ class GameGUI:
         suggestions_frame.rowconfigure(0, weight=1)
         
         # 右側視頻顯示
-        video_frame = ttk.LabelFrame(main_frame, text="攝像頭畫面", padding="5")
+        video_frame = ttk.LabelFrame(main_frame, text="攝像頭畫面 (Picamera2)", padding="5")
         video_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         
         self.video_label = ttk.Label(video_frame)
@@ -102,16 +116,17 @@ class GameGUI:
         video_thread.start()
         
     def video_loop(self):
-        """視頻處理循環"""
+        """視頻處理循環 - 適配Picamera2的RGB格式"""
         while self.is_running:
             try:
-                frame = self.video_capture.get_frame()
-                if frame is not None:
-                    self.current_frame = frame.copy()
+                # 從picamera2獲取RGB格式的幀
+                frame_rgb = self.video_capture.get_frame()
+                if frame_rgb is not None:
+                    # 保存當前幀（轉換為BGR格式供OpenCV處理）
+                    self.current_frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
                     
-                    # 顯示視頻
-                    display_frame = cv2.resize(frame, (640, 480))
-                    display_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
+                    # 顯示視頻（RGB格式直接用於Tkinter）
+                    display_frame = cv2.resize(frame_rgb, (640, 480))
                     
                     image = Image.fromarray(display_frame)
                     photo = ImageTk.PhotoImage(image)
@@ -119,15 +134,53 @@ class GameGUI:
                     self.video_label.configure(image=photo)
                     self.video_label.image = photo
                     
-                    # 如果遊戲開始，處理卡牌檢測
+                    # 如果遊戲開始，處理卡牌檢測（使用BGR格式）
                     if self.setup_complete and hasattr(self, 'game_started') and self.game_started:
-                        self.process_game_frame(frame)
+                        self.process_game_frame(self.current_frame)
                         
                 time.sleep(0.033)  # 約30 FPS
                 
             except Exception as e:
                 print(f"視頻處理錯誤: {e}")
                 time.sleep(0.1)
+    
+    def auto_focus(self):
+        """觸發自動對焦"""
+        if self.video_capture.auto_focus():
+            self.status_label.configure(text="自動對焦完成")
+        else:
+            self.status_label.configure(text="自動對焦失敗或不支援")
+    
+    def adjust_brightness(self):
+        """調整亮度"""
+        try:
+            # 創建亮度調整對話框
+            brightness_window = tk.Toplevel(self.root)
+            brightness_window.title("調整亮度")
+            brightness_window.geometry("300x150")
+            brightness_window.transient(self.root)
+            brightness_window.grab_set()
+            
+            ttk.Label(brightness_window, text="亮度調整 (-1.0 到 1.0):").pack(pady=10)
+            
+            brightness_var = tk.DoubleVar(value=0.0)
+            brightness_scale = ttk.Scale(brightness_window, from_=-1.0, to=1.0, 
+                                       variable=brightness_var, orient=tk.HORIZONTAL)
+            brightness_scale.pack(fill=tk.X, padx=20, pady=10)
+            
+            def apply_brightness():
+                brightness_value = brightness_var.get()
+                controls = {"Brightness": brightness_value}
+                if self.video_capture.set_camera_controls(controls):
+                    self.status_label.configure(text=f"亮度設置為: {brightness_value:.2f}")
+                else:
+                    self.status_label.configure(text="亮度調整失敗")
+                brightness_window.destroy()
+            
+            ttk.Button(brightness_window, text="應用", command=apply_brightness).pack(pady=10)
+            
+        except Exception as e:
+            print(f"亮度調整錯誤: {e}")
                 
     def start_calibration(self):
         """開始校準"""
@@ -182,7 +235,7 @@ class GameGUI:
     def process_game_frame(self, frame):
         """處理遊戲幀"""
         try:
-            # 檢測卡牌
+            # 檢測卡牌（使用BGR格式的幀）
             detected_cards = self.card_detector.detect_cards(frame)
             
             if 'error' not in detected_cards:

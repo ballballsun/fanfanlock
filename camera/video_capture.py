@@ -1,19 +1,20 @@
-import cv2
 import numpy as np
 from typing import Optional
+from picamera2 import Picamera2
+import time
 
 class VideoCapture:
-    """攝像頭影像擷取模組 - 使用OpenCV控制攝像頭"""
+    """攝像頭影像擷取模組 - 使用Picamera2控制Raspberry Pi攝像頭"""
     
     def __init__(self, camera_id: int = 0):
         """
         初始化攝像頭
         
         Args:
-            camera_id: 攝像頭ID，通常0為預設攝像頭
+            camera_id: 攝像頭ID (picamera2中通常為0，多攝像頭時可能需要調整)
         """
         self.camera_id = camera_id
-        self.cap = None
+        self.picam2 = None
         self.is_initialized = False
         
         # 預設參數
@@ -26,30 +27,32 @@ class VideoCapture:
     def initialize_camera(self) -> bool:
         """初始化攝像頭連接"""
         try:
-            self.cap = cv2.VideoCapture(self.camera_id)
+            # 創建Picamera2實例
+            self.picam2 = Picamera2(self.camera_id)
             
-            if not self.cap.isOpened():
-                print(f"無法開啟攝像頭 {self.camera_id}")
-                return False
-                
-            # 設置預設參數
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.default_width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.default_height)
-            self.cap.set(cv2.CAP_PROP_FPS, self.default_fps)
+            # 獲取攝像頭預設配置
+            config = self.picam2.create_still_configuration(
+                main={"size": (self.default_width, self.default_height), "format": "RGB888"},
+                controls={"FrameRate": self.default_fps}
+            )
             
-            # 設置緩衝區大小，減少延遲
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # 應用配置
+            self.picam2.configure(config)
+            
+            # 啟動攝像頭
+            self.picam2.start()
+            
+            # 等待攝像頭穩定
+            time.sleep(2)
             
             self.is_initialized = True
             print(f"攝像頭 {self.camera_id} 初始化成功")
             
-            # 驗證設置
-            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-            
-            print(f"實際解析度: {actual_width}x{actual_height}")
-            print(f"實際幀率: {actual_fps} FPS")
+            # 顯示實際配置資訊
+            sensor_resolution = self.picam2.sensor_resolution
+            print(f"感應器解析度: {sensor_resolution}")
+            print(f"配置解析度: {self.default_width}x{self.default_height}")
+            print(f"目標幀率: {self.default_fps} FPS")
             
             return True
             
@@ -74,22 +77,40 @@ class VideoCapture:
             return False
             
         try:
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            # 停止當前攝像頭
+            self.picam2.stop()
             
-            # 驗證設置
-            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            # 創建新配置
+            config = self.picam2.create_still_configuration(
+                main={"size": (width, height), "format": "RGB888"},
+                controls={"FrameRate": self.default_fps}
+            )
             
-            if actual_width == width and actual_height == height:
-                print(f"解析度設置成功: {width}x{height}")
-                return True
-            else:
-                print(f"解析度設置部分成功: 目標 {width}x{height}, 實際 {actual_width}x{actual_height}")
-                return False
+            # 應用新配置
+            self.picam2.configure(config)
+            self.picam2.start()
+            
+            # 等待穩定
+            time.sleep(1)
+            
+            self.default_width = width
+            self.default_height = height
+            
+            print(f"解析度設置成功: {width}x{height}")
+            return True
                 
         except Exception as e:
             print(f"設置解析度錯誤: {e}")
+            # 嘗試恢復之前的配置
+            try:
+                config = self.picam2.create_still_configuration(
+                    main={"size": (self.default_width, self.default_height), "format": "RGB888"},
+                    controls={"FrameRate": self.default_fps}
+                )
+                self.picam2.configure(config)
+                self.picam2.start()
+            except:
+                self.is_initialized = False
             return False
             
     def set_fps(self, fps: int) -> bool:
@@ -107,20 +128,38 @@ class VideoCapture:
             return False
             
         try:
-            self.cap.set(cv2.CAP_PROP_FPS, fps)
+            # 停止當前攝像頭
+            self.picam2.stop()
             
-            # 驗證設置
-            actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+            # 創建新配置
+            config = self.picam2.create_still_configuration(
+                main={"size": (self.default_width, self.default_height), "format": "RGB888"},
+                controls={"FrameRate": fps}
+            )
             
-            if actual_fps == fps:
-                print(f"幀率設置成功: {fps} FPS")
-                return True
-            else:
-                print(f"幀率設置部分成功: 目標 {fps} FPS, 實際 {actual_fps} FPS")
-                return False
+            # 應用新配置
+            self.picam2.configure(config)
+            self.picam2.start()
+            
+            # 等待穩定
+            time.sleep(1)
+            
+            self.default_fps = fps
+            print(f"幀率設置成功: {fps} FPS")
+            return True
                 
         except Exception as e:
             print(f"設置幀率錯誤: {e}")
+            # 嘗試恢復之前的配置
+            try:
+                config = self.picam2.create_still_configuration(
+                    main={"size": (self.default_width, self.default_height), "format": "RGB888"},
+                    controls={"FrameRate": self.default_fps}
+                )
+                self.picam2.configure(config)
+                self.picam2.start()
+            except:
+                self.is_initialized = False
             return False
             
     def is_opened(self) -> bool:
@@ -130,22 +169,25 @@ class VideoCapture:
         Returns:
             bool: 攝像頭是否開啟
         """
-        return self.cap is not None and self.cap.isOpened() and self.is_initialized
+        return (self.picam2 is not None and 
+                self.is_initialized and 
+                self.picam2.started)
         
     def get_frame(self) -> Optional[np.ndarray]:
         """
         獲取一幀影像
         
         Returns:
-            numpy.ndarray: 影像幀，如果失敗則返回None
+            numpy.ndarray: 影像幀 (RGB格式)，如果失敗則返回None
         """
         if not self.is_opened():
             return None
             
         try:
-            ret, frame = self.cap.read()
+            # 捕獲幀 (RGB格式)
+            frame = self.picam2.capture_array()
             
-            if ret and frame is not None:
+            if frame is not None and frame.size > 0:
                 return frame
             else:
                 print("無法讀取攝像頭幀")
@@ -166,25 +208,76 @@ class VideoCapture:
             return {"error": "攝像頭未開啟"}
             
         try:
+            # 獲取攝像頭資訊
+            sensor_modes = self.picam2.sensor_modes
+            sensor_resolution = self.picam2.sensor_resolution
+            
             info = {
                 "camera_id": self.camera_id,
-                "width": int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                "height": int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                "fps": int(self.cap.get(cv2.CAP_PROP_FPS)),
-                "backend": self.cap.getBackendName(),
-                "is_opened": self.is_opened()
+                "width": self.default_width,
+                "height": self.default_height,
+                "fps": self.default_fps,
+                "sensor_resolution": sensor_resolution,
+                "sensor_modes_count": len(sensor_modes),
+                "is_opened": self.is_opened(),
+                "started": self.picam2.started if self.picam2 else False
             }
             return info
             
         except Exception as e:
             return {"error": f"獲取攝像頭資訊錯誤: {e}"}
+    
+    def set_camera_controls(self, controls: dict) -> bool:
+        """
+        設置攝像頭控制參數
+        
+        Args:
+            controls: 控制參數字典，例如 {"Brightness": 0.1, "Contrast": 1.2}
+            
+        Returns:
+            bool: 設置是否成功
+        """
+        if not self.is_opened():
+            print("攝像頭未開啟，無法設置控制參數")
+            return False
+            
+        try:
+            self.picam2.set_controls(controls)
+            print(f"攝像頭控制參數設置成功: {controls}")
+            return True
+        except Exception as e:
+            print(f"設置攝像頭控制參數錯誤: {e}")
+            return False
+    
+    def auto_focus(self) -> bool:
+        """
+        觸發自動對焦 (如果攝像頭支援)
+        
+        Returns:
+            bool: 操作是否成功
+        """
+        if not self.is_opened():
+            print("攝像頭未開啟，無法執行自動對焦")
+            return False
+            
+        try:
+            # 嘗試設置自動對焦
+            self.picam2.set_controls({"AfMode": 2, "AfTrigger": 0})
+            time.sleep(0.5)  # 等待對焦完成
+            print("自動對焦完成")
+            return True
+        except Exception as e:
+            print(f"自動對焦錯誤 (可能不支援): {e}")
+            return False
             
     def release(self):
         """釋放攝像頭資源"""
         try:
-            if self.cap is not None:
-                self.cap.release()
-                self.cap = None
+            if self.picam2 is not None:
+                if self.picam2.started:
+                    self.picam2.stop()
+                self.picam2.close()
+                self.picam2 = None
                 
             self.is_initialized = False
             print("攝像頭資源已釋放")
