@@ -44,6 +44,7 @@ def extract_card_template(image_path, output_path):
 
     # Get bounding box and extract the card area
     x, y, w, h = cv2.boundingRect(card_contour)
+    print(f"原始卡牌範圍 x={x}, y={y}, w={w}, h={h}")  # <--- log 出原來卡牌的大小
     card_img = image[y:y+h, x:x+w]
 
     # Resize to standard template size
