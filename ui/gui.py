@@ -130,7 +130,7 @@ class GameGUI:
         for row in range(4):  # 4行
             button_row = []
             for col in range(6):  # 6列
-                btn = tk.Button(
+                btn = tk.Label(
                     grid_container,
                     text=f"{row*6+col+1}",  # 顯示卡牌編號 1-24
                     width=4,
@@ -157,14 +157,14 @@ class GameGUI:
         ]
         
         for i, (text, color) in enumerate(legends):
-            legend_btn = tk.Button(
+            legend_btn = tk.Label(
                 legend_frame,
                 text=text,
                 bg=color,
                 width=6,
                 height=1,
                 font=("Arial", 8),
-                state="disabled",
+                #state="disabled",
                 relief="flat"
             )
             legend_btn.grid(row=0, column=i, padx=2)
