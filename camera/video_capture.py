@@ -154,6 +154,16 @@ class VideoCapture:
         except Exception as e:
             print(f"讀取幀錯誤: {e}")
             return None
+
+    def digital_zoom(self, frame, scale):
+        h, w = frame.shape[:2]
+        center_x, center_y = w // 2, h // 2
+        radius_x, radius_y = int(w // (2*scale)), int(h // (2*scale))
+        min_x, max_x = center_x - radius_x, center_x + radius_x
+        min_y, max_y = center_y - radius_y, center_y + radius_y
+        cropped = frame[min_y:max_y, min_x:max_x]
+        # 放大到原本size
+        return cv2.resize(cropped, (w, h))
             
     def get_camera_info(self) -> dict:
         """

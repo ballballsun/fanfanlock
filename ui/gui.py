@@ -235,6 +235,11 @@ class GameGUI:
             try:
                 frame = self.video_capture.get_frame()
                 if frame is not None:
+                    # 確認 frame 是 numpy array
+                    if hasattr(frame, 'shape'):
+                        frame = self.video_capture.digital_zoom(frame, scale=1.5)
+                    else:
+                        print("frame 非 numpy array，type:", type(frame))
                     self.current_frame = frame.copy()
                     
                     # 顯示視頻
